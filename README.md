@@ -1,5 +1,5 @@
 # **MIDI-Fighter-Twister-Python-Script**
-## **An FL Studio Script for the MIDI Fighter Twister**
+**An FL Studio Script for the MIDI Fighter Twister**
 
 ### **FEATURES**
 **BASIC ENHANCEMENTS - WORKING**
