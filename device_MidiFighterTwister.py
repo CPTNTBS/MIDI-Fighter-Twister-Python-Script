@@ -1,6 +1,7 @@
 # name=Midi Fighter Twister
 
 import math
+#import collections
 import midi
 import device
 import plugins
@@ -11,27 +12,37 @@ import ui
 #----------------------------------------OVERRIDES----------------------------------------#
 """
 
+#channel0Values = [0] * 64
+#channel4Values = [0] * 64
+
+channel0InitCtrl = []
+channel0InitCtrlVal = []
+#channel4InitCtrl = []
+#channel4InitCtrlVal = []
+
 def OnInit():
 	print(str(device.getName() + ' is connected to Port '+ str(device.getPortNumber())))
-	InitializedLEDs()
+
+	#InitializeEncoders()
+	UpdateEncoders()
+	print(channel0InitCtrl)
+	print(channel0InitCtrlVal)
 	print("----------------------------------------------")
 
-		#	SendMIDI()
-		#print(device.getLinkedInfo(0x800000 + ctrlChange))
-		#if device.getLinkedInfo(0x800000 + ctrlChange) == -1:
-			#SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, 17)
-			#SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, 65)
-
-# Called when something changed that the script might want to respond to.
-#def OnRefresh(HW_Dirty_RemoteLinkValues):
-#	if Flags & midi.HW_Dirty_RemoteLinks:
-#		# Update the on your devices shown links into a dictionary
-#	if Flags & midi.HW_Dirty_RemoteLinkValues: (if you are running the current beta)
-#		# Update displays by looping throug the dictionary
-
-# Use when looking for modification to midi device
 def OnMidiMsg(event):
-	#event.handled = False
+	event.handled = False
+
+	#if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, event.data1)) != 0x7fffffff:
+	if event.midiChan == 0:
+		if event.data1 in channel0InitCtrl:
+			channel0InitCtrlVal[channel0InitCtrl.index(event.data1)] = event.data2
+			print(channel0InitCtrl)
+			print(channel0InitCtrlVal)
+
+
+	#UpdateEncoderArrays(event.data1, event.midiChan, event.data2)
+	#print(channel0Values)
+	#print(channel4Values)
 	#print(plugins.isValid(1,2))
 	#print(plugins.getPluginName(1,1))#slot index (track effect slot) = 1, index (track) = 1
 	#print(ui.getFocusedPluginName()) #plugin index = 6
@@ -52,11 +63,6 @@ def OnMidiMsg(event):
 		#Set event.handled to false to modify what happens if it is activated
 	#if event.status == 0xB0 or event.status == 0xB4:
 	#	OnRefresh
-	print("CC Value: " + str(event.data1))
-	#print(device.isAssigned())
-	print("Control ID: " + str(hex(midi.EncodeRemoteControlID(device.getPortNumber(), event.midiChan, event.data1))))
-	print("Event ID: " + str(hex(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), event.midiChan, event.data1)))))
-	#print(device.getLinkedValue(midi.EncodeRemoteControlID(device.getPortNumber(), event.midiChan, event.data1)))
 
 	#if event.data1 == 15:
 	#SendMIDI(midi.MIDI_CONTROLCHANGE, 2, event.data1, event.data2)
@@ -66,14 +72,18 @@ def OnMidiMsg(event):
 	#PrintEncoderData(event.data1)
 	#event.handled = True
 
-#def LightUp():
-
 #def UpdatePluginVals(event):
 #	for plugin in range(9):
 #		if plugins.isValid
 
-def OnRefresh(HW_Dirty_RemoteLinkValues):
-	GetFocusedWindowInfo()
+def OnRefresh(event):
+	#GetFocusedWindowInfo()
+	print(hex(event))
+	#print(event)
+	#if event == 0x1200:
+	#	BiDirection()
+	UpdateEncoders()
+
 
 """
 #----------------------------------------HELPER METHODS----------------------------------------#
@@ -86,16 +96,62 @@ def OnRefresh(HW_Dirty_RemoteLinkValues):
 def SendMIDI(command, channel, data1, data2):
 	device.midiOutMsg((command | channel) + (data1 << 8) + (data2 << 16));
 
-#Unlinked encoders have the LED turned off and Indicator Brightness Dimmed.
-def InitializedLEDs():
+def BiDirection():
+	for ctrl in range(64):
+		if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrl)) != 0x7fffffff:
+			SendMIDI(0xB0, 0, ctrl, )
+
+# This Method does a lot of things:
+# 1. For any linked controls, it turns the RGB on and sets the indicator brightness to the max
+# 2. For any unlinked controls, it turns the RGB off and dims the indicator brightness
+# 3. Functionality for adding linked controls, removing linked controls, and replacing linked controls is present
+def UpdateEncoders():
+	prevControlLinkIndex = -1
+	currControlLink = -1
+
 	for ctrlChange in range(64):
-		print("Control #" + str(ctrlChange) + ": " + str(hex(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)))))
+		#print("Control #" + str(ctrlChange) + ": " + str(hex(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)))))
 		if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)) == 0x7fffffff:
-			SendMIDI(0xB0, 2, ctrlChange, 17)
-			SendMIDI(0xB0, 2, ctrlChange, 77)
+			if ctrlChange in channel0InitCtrl:
+				prevControlLinkIndex = channel0InitCtrl.index(ctrlChange)
+			SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
+			SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+			SendMIDI(0xB0, 0, ctrlChange, 0)
 		else:
+			if ctrlChange not in channel0InitCtrl:
+				currControlLink = ctrlChange
 			SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-			SendMIDI(0xB0, 2, ctrlChange, Animation.INDICATOR_BRIGHT)
+			SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+
+	if prevControlLinkIndex == -1 and currControlLink != -1: #Means you added a new linked control
+		channel0InitCtrl.append(currControlLink)
+		channel0InitCtrlVal.append(0)
+	if prevControlLinkIndex != -1 and currControlLink == -1: #Means you removed a linked control value
+		channel0InitCtrl.pop(prevControlLinkIndex)
+		channel0InitCtrlVal.pop(prevControlLinkIndex)
+	if prevControlLinkIndex != -1 and currControlLink != -1: #Means you replaced a linked control with a new one
+		channel0InitCtrl[prevControlLinkIndex] = currControlLink
+	
+#Used when changing the linked control; The script needs to update the index corresponding to the link with the new control (Unused)
+def ReplaceLink(ctrl):
+	newLink = device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrl))
+	for initCtrl in channel0InitCtrl:
+		if newLink == device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, initCtrl)):
+			channel0InitCtrl[channel0InitCtrl.index(initCtrl)] = newLink
+
+#Zeros out all the encoders (Unused
+#def InitializeEncoders():
+#	for ctrlChange in range(64):
+#		SendMIDI(0xB0, 0, ctrlChange, 0)
+#		SendMIDI(0xB0, 4, ctrlChange, 0)
+
+'''
+def UpdateEncoderArrays(ctrl, channel, value):
+	if channel == 0:
+		channel0Values[ctrl] = value
+	elif channel == 4:
+		channel4Values[ctrl] = value
+'''
 
 #Endless Encoder Fix
 #	- Made for ENC 3FH/41H mode.
@@ -110,14 +166,19 @@ def EndlessEncoder(encVal):
 		print('MixVal - 1')
 
 #Get method for EventData
-def getEventID(track,slot,param):
+def GetEventID(track,slot,param):
 	return (((0x2000 + 0x40 * track) + slot) << 0x10) + 0x8000 + param
 
+def GetFocusedPluginTrack():
+	return math.floor((ui.getFocusedFormID() >> 16) / 64)
+	
+def GetFocusedPluginSlot():
+	return (ui.getFocusedFormID() >> 16) % 64
 
 #Debugging method for checking focused plugins
 def GetFocusedWindowInfo():
-	trackNumber = math.floor((ui.getFocusedFormID() >> 16) / 64)
-	slotNumber = (ui.getFocusedFormID() >> 16) % 64
+	trackNumber = GetFocusedPluginTrack()
+	slotNumber = GetFocusedPluginSlot()
 	print("Current Plugin: " + str(plugins.getPluginName(trackNumber, slotNumber)))
 	if trackNumber == 0:
 		print("Location: Master Track, Slot " + str(slotNumber + 1))
@@ -126,49 +187,24 @@ def GetFocusedWindowInfo():
 
 	print("Linkable Parameters:")
 	for param in range(4240): #Every plugin (effects at least) carries 4240 plugins
-		if plugins.getParamName(param, trackNumber, slotNumber) != "": #Unnamed Midi CC (ones w/ default MIDI CC#) are just blank strings
+		while plugins.getParamName(param, trackNumber, slotNumber) != "": #Unnamed Midi CC (ones w/ default MIDI CC#) are just blank strings
 			print("     - " + plugins.getParamName(param, trackNumber, slotNumber))
-		else:
-			break
 	print("Plugin ID: " + str(hex(ui.getFocusedFormID())))
 	print("----------------------------------------------")
 
 def GetChannel(encoder):
 	print(encoder.progNum)
 
+#Debugging method for ControlID and EventId of current CC Value
+def GetIDS(event):
+	print("CC Value: " + str(event.data1))
+	print("Control ID: " + str(hex(midi.EncodeRemoteControlID(device.getPortNumber(), event.midiChan, event.data1))))
+	print("Event ID: " + str(hex(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), event.midiChan, event.data1)))))
+
 def PrintEncoderData(encoder):
 	for channelNr in range(0, 4):
 		ID = device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), channelNr, encoder), 0)
 		print(device.getLinkedInfo(ID))
-
-	#print("Encoder " + str(encoder.data1) + ":")
-	#print("Channel 0 Value: ")
-	#print("Channel 1 Value: ")
-	#print("Channel 2 Value: ")
-	#print("Channel 3 Value: ")
-	#print("Channel 4 Value: ")
-
-#def ShiftControl(control):
-#	if control.midiId == midi.MIDI_CONTROLCHANGE + 1
-			
-#Debugging method for checking controller event data
-def PrintOutControllerDeats(event):
-	#print('Modified Event is Handled: ' + str(bool(event.handled)))
-	#print('Modified Event Timestamp: ' + str(event.timestamp))
-	#print('Modified Event Status: ' + str(event.status))
-	if event.midiId == 0xB0:
-		print("Modified Event Type: Control Change")
-	elif event.midiId == 0x90:
-		print("Modified Event Type: Note On")
-	else:
-		print("Modified Event Function: " + str(event.midiId))
-	print("Modified Event Data1 (Controller): " + str(event.data1))
-	print("Modified Event Data2 (Value): " + str(event.data2))
-	print("Modified Event Port: " + str(event.port))
-	print("Modified Event Channel: " + str(event.midiChan))
-	print("Modified Event ChannelEX: " + str(event.midiChanEx))
-	print("----------------------------------------------")
-
 """
 #----------------------------------------CLASSES----------------------------------------#
 """
@@ -208,55 +244,6 @@ class Animation:
 	INDICATOR_SEMI = 80
 	INDICATOR_BRIGHT = 95
 	RAINBOW = 127
-
-class EncoderTypeFlag:
-	CC_TOGGLE = 0
-	CC_HOLD = 1
-	RESET_VALUE = 2
-	SHIFT_TOGGLE = 3
-	SHIFT_HOLD = 4
-
-class Encoder:
-	channel0Value = 0;
-	channel1Value = Color.VIOLET;
-	channel2Value = 0;
-	channel4Value = 0;
-	
-	'''	def SetDefaults():
-		SendMIDI(0xB0, 0, data1, Encoder.channel0Value):
-		SendMIDI(0xB0, 1, data1, Encoder.channel1Value):
-		SendMIDI(0xB0, 2, data1, Encoder.channel2Value):
-		SendMIDI(0xB0, 4, data1, Encoder.channel4Value):
-	'''
-
-	def SetCh0Value(newValue):
-		Encoder.channel0Value = newValue;
-
-	def SetCh1Value(newValue):
-		Encoder.channel1Value = newValue;
-
-	def SetCh2Value(newValue):
-		Encoder.channel2Value = newValue;
-
-	def SetCh4Value(newValue):
-		Encoder.channel4Value = newValue;
-
-	def GetCh0Value():
-		return Encoder.channel0Value;
-
-	def GetCh1Value():
-		return Encoder.channel1Value;
-
-	def GetCh2Value():
-		return Encoder.channel2Value;
-
-	def GetCh4Value():
-		return Encoder.channel4Value;
-	
-	#def UpdateCh1():
-
-class EncoderBank:
-	channel3DefaultBank = 0;
 
 """
 #----------------------------------------APPENDIX----------------------------------------#
@@ -314,8 +301,8 @@ CHANNEL DATA:
 			- 127 = Rainbow Cycle
 	CHANNEL 3: BANK SELECT
 	CHANNEL 4: SECONDARY (SHIFT) ENCODER INDICATOR AMOUNT (0 - 127)
-	CHANNEL 5: LED ANIMATION (AGAIN?)
-	CHANNEL 6: INDICATOR AMOUNT (AGAIN?)
+	CHANNEL 5: 2ND LED ANIMATION
+	CHANNEL 6: 2ND INDICATOR AMOUNT
 	CHANNEL 8:
 
 GENERAL INFORMATION:
@@ -331,6 +318,8 @@ GENERAL INFORMATION:
 			- Ex: Linking parameters to encoders, notes and their values, etc.
 		- Only handle parts of the device (channels, CCs, etc) when there is something specific that you want the control to do (change to this color when this happens, send this data back to the device when this happens, etc.).
 			- Some Channels and Settings (Channel 3, Reset Encoder Val) don't need to be handled b/c they more or less do things exclusively to the device itself and nothing to the DAW.
+	SETTING TWO ANIMATIONS:
+		- You can set two animataons via the secondary LED animation channel (2 & 5)
 	DEVICE CC VALUES
 		- CC Numbers on Device: 0-63 (64 different CCs)
 			- Controls With Side button functionality: 0, 1, 2, 3, 8.
@@ -340,13 +329,22 @@ GENERAL INFORMATION:
 	EVENTID COMPUTATION:
 		- Base 10: (((0x2000 + 0x40 * track) + slot) << 0x10) + 0x8000 + param
 		- Base 16: (((8192 + 64 * track) + slot) << 16) + 32768 + param
+	CONTROLID COMPUTATION:
+		- Base 10: (8388608 + 65536 * channel) + ctrl
+		- Base 16: (0x800000 + 0x10000 * channel) + ctrl
 	FL TERM GLOSSARY:
-		eventData = input from the device
-		data1 = device cc
-		data2 = device cc amount
-		midiId = midi codes (see midi.py)
-		midiChan = midi channel
-		status = midiId + midiChan
+		- eventData = input from the device
+		- data1 = device cc
+		- data2 = device cc amount
+		- midiId = midi codes (see midi.py)
+		- midiChan = midi channel
+		- status = midiId + midiChan
+	FL REFRESH FLAGS:
+		- 0x20 = DAW Unload Component
+		- 0x127 = DAW Load Component, Focus Plugin
+		- 0x1000 = Plugin Parameter Change
+		- 0x1200 = Linked Control Change
+		- 0x4127 = New Plugin
 
 TENTATIVE MIDI FIGHTER TWISTER BANK SETUP:
 	BANK 1: Effects
