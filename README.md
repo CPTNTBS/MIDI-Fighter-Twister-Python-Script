@@ -1,7 +1,7 @@
-#**MIDI-Fighter-Twister-Python-Script**
-##**An FL Studio Script for the MIDI Fighter Twister**
+# **MIDI-Fighter-Twister-Python-Script**
+## **An FL Studio Script for the MIDI Fighter Twister**
 
-###**FEATURES**
+### **FEATURES**
 **BASIC ENHANCEMENTS - WORKING**
 - When an encoder is linked to a value, the RGB LED is visible and Indicator Brightness is maxed. Unlinked encoders' LEDs are off and indicator brightness dimmed.
 
