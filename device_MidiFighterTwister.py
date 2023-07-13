@@ -1,11 +1,19 @@
 # name=Midi Fighter Twister
 
 import math
+
+"""
+import sys
+sys.path.insert(0, 'C:\Program Files\Image-Line\FL Studio 21\Shared\Python\Lib\midi.py')
+"""
+
 import midi
+import utils
 import device
 import plugins
 import mixer
 import ui
+
 
 """
 #----------------------------------------OVERRIDES----------------------------------------#
@@ -13,17 +21,42 @@ import ui
 
 channel0InitCtrl = []
 channel0InitCtrlVal = []
-#channel4InitCtrl = []
-#channel4InitCtrlVal = []
+channel4InitCtrl = []
+channel4InitCtrlVal = []
+channel1InitCtrl = []
+channel1InitCtrlVal = []
 
+# This method turns off all of the lights on initialization of the script in FL.
 def OnInit():
-	print(str(device.getName() + ' is connected to Port '+ str(device.getPortNumber())))
+	for ctrlChange in range(64):
+		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+		SendMIDI(0xB0, 0, ctrlChange, 0)
+
+# Likewise, this method returns the MIDI Fighter Twister to its default configuration upon closing FL Studio
+def OnDeInit():
+	for ctrlChange in range(64):
+		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+		SendMIDI(0xB0, 0, ctrlChange, 0)
+
+#	print(str(device.getName() + ' is connected to Port '+ str(device.getPortNumber())))
 
 	#InitializeEncoders()
-	UpdateEncoders()
-	print(channel0InitCtrl)
-	print(channel0InitCtrlVal)
-	print("----------------------------------------------")
+#	UpdateEncoders(0)
+#	print("Channel 0:")
+#	print(channel0InitCtrl)
+#	print(channel0InitCtrlVal)
+#	UpdateEncoders(1)
+#	print("Channel 1:")
+#	print(channel1InitCtrl)
+#	print(channel1InitCtrlVal)
+#	UpdateEncoders(4)
+#	print("Channel 4:")
+#	print(channel4InitCtrl)
+#	print(channel4InitCtrlVal)
+
+#	print("----------------------------------------------")
 
 def OnMidiMsg(event):
 	event.handled = False
@@ -31,11 +64,63 @@ def OnMidiMsg(event):
 	if event.midiChan == 0:
 		if event.data1 in channel0InitCtrl:
 			channel0InitCtrlVal[channel0InitCtrl.index(event.data1)] = event.data2
+	elif event.midiChan == 1:
+		if event.data1 in channel1InitCtrl:
+			channel1InitCtrlVal[channel1InitCtrl.index(event.data1)] = event.data2
+	elif event.midiChan == 4:
+		if event.data1 in channel4InitCtrl:
+			channel4InitCtrlVal[channel4InitCtrl.index(event.data1)] = event.data2
+
+	#GetIDS(event)
+	#UpdateEncoders(0)
+	#print("Channel 0:")
+	#print(channel0InitCtrl)
+	#print(channel0InitCtrlVal)
+	#UpdateEncoders(1)
+	#print("Channel 1:")
+	#print(channel1InitCtrl)
+	#print(channel1InitCtrlVal)
+	#UpdateEncoders(4)
+	#print("Channel 4:")
+	#print(channel4InitCtrl)
+	#print(channel4InitCtrlVal)
+
+def OnRefresh(flag):
+	print(flag)
+	if flag == 32:
+		if ui.getFocused(5) == 0:
+			for ctrlChange in range(64):
+				SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+				SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+				SendMIDI(0xB0, 0, ctrlChange, 0)		
+#def OnDoFullRefresh():
+#	device.fullRefresh();
+
+#def OnProjectLoad(status):
+#	if(status == 100):
+#		device.fullRefresh();
+
+def OnIdle():
+	UpdateEncoders(0)
+	UpdateEncoders(1)
+	UpdateEncoders(4)
+
+	UpdateIndicators(0)
+	#UpdateIndicators(1)
+	UpdateIndicators(4)
 
 def OnRefresh(event):
-	UpdateEncoders()
-	if event == 0x1200:
-		UpdateIndicators()
+	#print(hex(event))
+	UpdateEncoders(0)
+	UpdateEncoders(1)
+	UpdateEncoders(4)
+	if event == 0x127 or event == 0x10127:
+	#UpdateEncoders()
+		UpdateIndicators(0)
+		UpdateIndicators(1)
+		UpdateIndicators(4)
+	#if event == 0x200:
+	#	UpdateIndicators()
 
 """
 #----------------------------------------HELPER METHODS----------------------------------------#
@@ -52,40 +137,111 @@ def SendMIDI(command, channel, data1, data2):
 # 1. For any linked controls, it turns the RGB on and sets the indicator brightness to the max
 # 2. For any unlinked controls, it turns the RGB off and dims the indicator brightness
 # 3. Functionality for adding linked controls, removing linked controls, and replacing linked controls is present
-def UpdateEncoders():
+def UpdateEncoders(channel):
 	prevControlLinkIndex = -1
 	currControlLink = -1
 
-	for ctrlChange in range(64):
-		if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)) == 0x7fffffff:
-			if ctrlChange in channel0InitCtrl:
-				prevControlLinkIndex = channel0InitCtrl.index(ctrlChange)
-			SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
-			SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
-			SendMIDI(0xB0, 0, ctrlChange, 0)
-		else:
-			if ctrlChange not in channel0InitCtrl:
-				currControlLink = ctrlChange
-			SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-			SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+	if channel == 0:
+		for ctrlChange in range(64):
+			if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)) == 0x7fffffff:
+				if ctrlChange in channel0InitCtrl:
+					prevControlLinkIndex = channel0InitCtrl.index(ctrlChange)
+					SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+					SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+					SendMIDI(0xB0, 0, ctrlChange, 0)
+			else:
+				if ctrlChange not in channel0InitCtrl:
+					currControlLink = ctrlChange
+					SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+					SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
 
-	if prevControlLinkIndex != -1 or currControlLink != -1:
-		if prevControlLinkIndex == -1 and currControlLink != -1: #Means you added a new linked control
-			channel0InitCtrl.append(currControlLink)
-			channel0InitCtrlVal.append(0)
-		if prevControlLinkIndex != -1 and currControlLink == -1: #Means you removed a linked control value
-			channel0InitCtrl.pop(prevControlLinkIndex)
-			channel0InitCtrlVal.pop(prevControlLinkIndex)
-		if prevControlLinkIndex != -1 and currControlLink != -1: #Means you replaced a linked control with a new one
-			channel0InitCtrl[prevControlLinkIndex] = currControlLink
+					# Mix Functionality
+					#if device.getLinkedParamName(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange))) == "Mix":
+					#	SendMIDI(0xB0, 1, ctrlChange, Color.GREEN)
+					#	SendMIDI(0xB0, 1, ctrlChange, 0)
+					#print(device.getLinkedParamName(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange))))
+
+		if prevControlLinkIndex != -1 or currControlLink != -1:
+			if prevControlLinkIndex == -1 and currControlLink != -1: #Means you added a new linked control
+				channel0InitCtrl.append(currControlLink)
+				channel0InitCtrlVal.append(0)
+			if prevControlLinkIndex != -1 and currControlLink == -1: #Means you removed a linked control value
+				channel0InitCtrl.pop(prevControlLinkIndex)
+				channel0InitCtrlVal.pop(prevControlLinkIndex)
+			if prevControlLinkIndex != -1 and currControlLink != -1: #Means you replaced a linked control with a new one
+				channel0InitCtrl[prevControlLinkIndex] = currControlLink
+	elif channel == 1:
+		for ctrlChange in range(64):
+			if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, ctrlChange)) == 0x7fffffff:
+				if ctrlChange in channel1InitCtrl:
+					prevControlLinkIndex = channel1InitCtrl.index(ctrlChange)
+				#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
+				#SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+				#SendMIDI(0xB0, 1, ctrlChange, 0)
+			else:
+				if ctrlChange not in channel1InitCtrl:
+					currControlLink = ctrlChange
+					SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+				#if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)) != 0x7fffffff or device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 4, ctrlChange)) != 0x7fffffff:
+					#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+				#else
+					#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
+
+
+		if prevControlLinkIndex != -1 or currControlLink != -1:
+			if prevControlLinkIndex == -1 and currControlLink != -1: #Means you added a new linked control
+				channel1InitCtrl.append(currControlLink)
+				channel1InitCtrlVal.append(0)
+			if prevControlLinkIndex != -1 and currControlLink == -1: #Means you removed a linked control value
+				channel1InitCtrl.pop(prevControlLinkIndex)
+				channel1InitCtrlVal.pop(prevControlLinkIndex)
+			if prevControlLinkIndex != -1 and currControlLink != -1: #Means you replaced a linked control with a new one
+				channel1InitCtrl[prevControlLinkIndex] = currControlLink
+	elif channel == 4:
+		for ctrlChange in range(64):
+			if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 4, ctrlChange)) == 0x7fffffff:
+				if ctrlChange in channel4InitCtrl:
+					prevControlLinkIndex = channel4InitCtrl.index(ctrlChange)
+				#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
+				#SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+				#SendMIDI(0xB0, 4, ctrlChange, 0)
+			else:
+				if ctrlChange not in channel4InitCtrl:
+					currControlLink = ctrlChange
+				#SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+				#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+
+		if prevControlLinkIndex != -1 or currControlLink != -1:
+			if prevControlLinkIndex == -1 and currControlLink != -1: #Means you added a new linked control
+				channel4InitCtrl.append(currControlLink)
+				channel4InitCtrlVal.append(0)
+			if prevControlLinkIndex != -1 and currControlLink == -1: #Means you removed a linked control value
+				channel4InitCtrl.pop(prevControlLinkIndex)
+				channel4InitCtrlVal.pop(prevControlLinkIndex)
+			if prevControlLinkIndex != -1 and currControlLink != -1: #Means you replaced a linked control with a new one
+				channel4InitCtrl[prevControlLinkIndex] = currControlLink
 
 # BiDirectional Feedback
-def UpdateIndicators():
-	for linkedCtrl in channel0InitCtrl:
-		possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, linkedCtrl))))
-		if possNewVal != channel0InitCtrlVal[channel0InitCtrl.index(linkedCtrl)]:
-			channel0InitCtrlVal[channel0InitCtrl.index(linkedCtrl)] = possNewVal
-			SendMIDI(0xB0, 0, linkedCtrl, possNewVal)
+def UpdateIndicators(channel):
+	if channel == 0:
+		for linkedCtrl in channel0InitCtrl:
+			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, linkedCtrl))))
+			if possNewVal != channel0InitCtrlVal[channel0InitCtrl.index(linkedCtrl)]:
+				channel0InitCtrlVal[channel0InitCtrl.index(linkedCtrl)] = possNewVal
+				SendMIDI(0xB0, 0, linkedCtrl, possNewVal)
+	elif channel == 1:
+		for linkedCtrl in channel1InitCtrl:
+			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, linkedCtrl))))
+			#print(possNewVal)
+			if possNewVal != channel1InitCtrlVal[channel1InitCtrl.index(linkedCtrl)]:
+				channel1InitCtrlVal[channel1InitCtrl.index(linkedCtrl)] = possNewVal
+				#SendMIDI(0xB0, 1, linkedCtrl, possNewVal)
+	elif channel == 4:
+		for linkedCtrl in channel4InitCtrl:
+			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 4, linkedCtrl))))
+			if possNewVal != channel4InitCtrlVal[channel4InitCtrl.index(linkedCtrl)]:
+				channel4InitCtrlVal[channel4InitCtrl.index(linkedCtrl)] = possNewVal
+				SendMIDI(0xB0, 4, linkedCtrl, possNewVal)
 
 # Endless Encoder Fix Status - TO DO
 #	- Made for ENC 3FH/41H mode.
