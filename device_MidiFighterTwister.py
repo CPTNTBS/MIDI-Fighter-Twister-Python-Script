@@ -60,7 +60,6 @@ def OnRefresh(event):
 	UpdateEncoders(4)
 	if event == 0x127 or event == 0x10127:
 		UpdateIndicators(0)
-		UpdateIndicators(1)
 		UpdateIndicators(4)
 
 """
@@ -101,10 +100,11 @@ def UpdateEncoders(channel):
                 # Send MIDI messages to turn on lights
                 if channel == 0:
                     SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-                    if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, ctrlChange)) == 0x7fffffff:
-                        SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_SEMI)
-                    else:
-                        SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+                    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+                    #if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, ctrlChange)) == 0x7fffffff:
+                    #    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_SEMI)
+                    #else:
+                    #    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
                 elif channel == 1:
                     SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
                 elif channel == 4:
