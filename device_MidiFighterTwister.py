@@ -8,14 +8,14 @@ import plugins
 import mixer
 import ui
 
-channel0InitCtrl = []
-channel0InitCtrlVal = []
-channel4InitCtrl = []
-channel4InitCtrlVal = []
-channel1InitCtrl = []
-channel1InitCtrlVal = []
 
+"""
 #----------------------------------------OVERRIDES----------------------------------------#
+"""
+
+# New implementation using sets/dictionaries to provide constant access time.
+channelInitCtrl = {0: set(), 1: set(), 4: set()}
+channelInitCtrlVal = {0: {}, 1: {}, 4: {}}
 
 # This method turns off all of the lights on initialization of the script in FL.
 def OnInit():
@@ -24,25 +24,18 @@ def OnInit():
 		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
 		SendMIDI(0xB0, 0, ctrlChange, 0)
 
-# Likewise, this method returns the MIDI Fighter Twister to its default configuration upon closing FL Studio. Decided to disable since keeping lights off seems more user friendly.
-#def OnDeInit():
-#	for ctrlChange in range(64):
-#		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-#		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-#		SendMIDI(0xB0, 0, ctrlChange, 0)
+# Likewise, this method returns the MIDI Fighter Twister to its default configuration upon closing FL Studio
+def OnDeInit():
+	for ctrlChange in range(64):
+		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+		SendMIDI(0xB0, 0, ctrlChange, 0)
 
 def OnMidiMsg(event):
 	event.handled = False
-
-	if event.midiChan == 0:
-		if event.data1 in channel0InitCtrl:
-			channel0InitCtrlVal[channel0InitCtrl.index(event.data1)] = event.data2
-	elif event.midiChan == 1:
-		if event.data1 in channel1InitCtrl:
-			channel1InitCtrlVal[channel1InitCtrl.index(event.data1)] = event.data2
-	elif event.midiChan == 4:
-		if event.data1 in channel4InitCtrl:
-			channel4InitCtrlVal[channel4InitCtrl.index(event.data1)] = event.data2
+	channel = event.midiChan
+	if channel in channelInitCtrlVal and event.data1 in channelInitCtrlVal[channel]:
+		channelInitCtrlVal[channel][event.data1] = event.data2
 
 def OnRefresh(flag):
 	print(flag)
@@ -52,13 +45,6 @@ def OnRefresh(flag):
 				SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
 				SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
 				SendMIDI(0xB0, 0, ctrlChange, 0)		
-
-#def OnDoFullRefresh():
-#	device.fullRefresh();
-
-#def OnProjectLoad(status):
-#	if(status == 100):
-#		device.fullRefresh();
 
 def OnIdle():
 	UpdateEncoders(0)
@@ -73,12 +59,9 @@ def OnRefresh(event):
 	UpdateEncoders(1)
 	UpdateEncoders(4)
 	if event == 0x127 or event == 0x10127:
-	#UpdateEncoders()
 		UpdateIndicators(0)
 		UpdateIndicators(1)
 		UpdateIndicators(4)
-	#if event == 0x200:
-	#	UpdateIndicators()
 
 """
 #----------------------------------------HELPER METHODS----------------------------------------#
@@ -94,104 +77,67 @@ def SendMIDI(command, channel, data1, data2):
 # This Method does a lot of things:
 # 1. For any linked controls, it turns the RGB on and sets the indicator brightness to the max
 # 2. For any unlinked controls, it turns the RGB off and dims the indicator brightness
-# 3. Functionality for adding linked controls, removing linked controls, and replacing linked controls
+# 3. Functionality for adding linked controls, removing linked controls, and replacing linked controls is present
 def UpdateEncoders(channel):
-	prevControlLinkIndex = -1
-	currControlLink = -1
+    # Ensure the channel is valid
+    if channel not in channelInitCtrl:
+        return
 
-	if channel == 0:
-		for ctrlChange in range(64):
-			if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)) == 0x7fffffff:
-				if ctrlChange in channel0InitCtrl:
-					prevControlLinkIndex = channel0InitCtrl.index(ctrlChange)
-					SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-					SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
-					SendMIDI(0xB0, 0, ctrlChange, 0)
-			else:
-				if ctrlChange not in channel0InitCtrl:
-					currControlLink = ctrlChange
-					SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-					SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+    currentCtrlSet = channelInitCtrl[channel]
+    updatedCtrlSet = set()
 
-		if prevControlLinkIndex != -1 or currControlLink != -1:
-			if prevControlLinkIndex == -1 and currControlLink != -1: # A linked control was added
-				channel0InitCtrl.append(currControlLink)
-				channel0InitCtrlVal.append(0)
-			if prevControlLinkIndex != -1 and currControlLink == -1: # A linked control was removed
-				channel0InitCtrl.pop(prevControlLinkIndex)
-				channel0InitCtrlVal.pop(prevControlLinkIndex)
-			if prevControlLinkIndex != -1 and currControlLink != -1: # A linked control was replaced
-				channel0InitCtrl[prevControlLinkIndex] = currControlLink
-	elif channel == 1:
-		for ctrlChange in range(64):
-			if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, ctrlChange)) == 0x7fffffff:
-				if ctrlChange in channel1InitCtrl:
-					prevControlLinkIndex = channel1InitCtrl.index(ctrlChange)
-				#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
-				#SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
-				#SendMIDI(0xB0, 1, ctrlChange, 0)
-			else:
-				if ctrlChange not in channel1InitCtrl:
-					currControlLink = ctrlChange
-					SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-				#if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, ctrlChange)) != 0x7fffffff or device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 4, ctrlChange)) != 0x7fffffff:
-					#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-				#else
-					#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
+    for ctrlChange in range(64):
+        eventID = device.findEventID(
+            midi.EncodeRemoteControlID(device.getPortNumber(), channel, ctrlChange)
+        )
+        isLinked = eventID != 0x7fffffff
+        wasInitialized = ctrlChange in currentCtrlSet
 
+        if isLinked:
+            updatedCtrlSet.add(ctrlChange)
+            if not wasInitialized:
+                # Newly linked control
+                channelInitCtrlVal[channel][ctrlChange] = 0
+                # Send MIDI messages to turn on lights
+                if channel == 0:
+                    SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+                    if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, ctrlChange)) == 0x7fffffff:
+                        SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_SEMI)
+                    else:
+                        SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+                elif channel == 1:
+                    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+                elif channel == 4:
+                    # Include any channel 4 specific behavior here
+                    pass
+        else:
+            if wasInitialized:
+                # Control was unlinked
+                del channelInitCtrlVal[channel][ctrlChange]
+                # Send MIDI messages to turn off lights
+                if channel == 0:
+                    SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+                    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+                    SendMIDI(0xB0, 0, ctrlChange, 0)
+                elif channel == 1:
+                    # Include any channel 1 specific behavior here
+                    pass
+                elif channel == 4:
+                    # Include any channel 4 specific behavior here
+                    pass
 
-		if prevControlLinkIndex != -1 or currControlLink != -1:
-			if prevControlLinkIndex == -1 and currControlLink != -1: # A linked control was added
-				channel1InitCtrl.append(currControlLink)
-				channel1InitCtrlVal.append(0)
-			if prevControlLinkIndex != -1 and currControlLink == -1: # A linked control was removed
-				channel1InitCtrl.pop(prevControlLinkIndex)
-				channel1InitCtrlVal.pop(prevControlLinkIndex)
-			if prevControlLinkIndex != -1 and currControlLink != -1: # A linked control was replaced
-				channel1InitCtrl[prevControlLinkIndex] = currControlLink
-	elif channel == 4:
-		for ctrlChange in range(64):
-			if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 4, ctrlChange)) == 0x7fffffff:
-				if ctrlChange in channel4InitCtrl:
-					prevControlLinkIndex = channel4InitCtrl.index(ctrlChange)
-				#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 7)
-				#SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
-				#SendMIDI(0xB0, 4, ctrlChange, 0)
-			else:
-				if ctrlChange not in channel4InitCtrl:
-					currControlLink = ctrlChange
-				#SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-				#SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+    # Update the initialized controls for the channel
+    channelInitCtrl[channel] = updatedCtrlSet
 
-		if prevControlLinkIndex != -1 or currControlLink != -1:
-			if prevControlLinkIndex == -1 and currControlLink != -1: # A linked control was added
-				channel4InitCtrl.append(currControlLink)
-				channel4InitCtrlVal.append(0)
-			if prevControlLinkIndex != -1 and currControlLink == -1: # A linked control was removed
-				channel4InitCtrl.pop(prevControlLinkIndex)
-				channel4InitCtrlVal.pop(prevControlLinkIndex)
-			if prevControlLinkIndex != -1 and currControlLink != -1: # A linked control was replaced
-				channel4InitCtrl[prevControlLinkIndex] = currControlLink
 
 # BiDirectional Feedback
 def UpdateIndicators(channel):
-	if channel == 0:
-		for linkedCtrl in channel0InitCtrl:
+	if channel in channelInitCtrlVal:
+		for linkedCtrl in channelInitCtrlVal[channel]:
 			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, linkedCtrl))))
-			if possNewVal != channel0InitCtrlVal[channel0InitCtrl.index(linkedCtrl)]:
-				channel0InitCtrlVal[channel0InitCtrl.index(linkedCtrl)] = possNewVal
-				SendMIDI(0xB0, 0, linkedCtrl, possNewVal)
-	elif channel == 1:
-		for linkedCtrl in channel1InitCtrl:
-			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, linkedCtrl))))
-			if possNewVal != channel1InitCtrlVal[channel1InitCtrl.index(linkedCtrl)]:
-				channel1InitCtrlVal[channel1InitCtrl.index(linkedCtrl)] = possNewVal
-	elif channel == 4:
-		for linkedCtrl in channel4InitCtrl:
-			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 4, linkedCtrl))))
-			if possNewVal != channel4InitCtrlVal[channel4InitCtrl.index(linkedCtrl)]:
-				channel4InitCtrlVal[channel4InitCtrl.index(linkedCtrl)] = possNewVal
-				SendMIDI(0xB0, 4, linkedCtrl, possNewVal)
+			if possNewVal != channelInitCtrlVal[channel][linkedCtrl]:
+				channelInitCtrlVal[channel][linkedCtrl] = possNewVal
+				SendMIDI(0xB0, channel, linkedCtrl, possNewVal)
 
 # Endless Encoder Fix Status - TO DO
 #	- Made for ENC 3FH/41H mode.
@@ -204,8 +150,6 @@ def EndlessEncoder(encVal):
 		print('MixVal + 1')
 	elif encVal == 63:
 		print('MixVal - 1')
-
-#----------------------------------------DEBUGGING----------------------------------------#
 
 # Get method for EventData
 def GetEventID(track,slot,param):
@@ -230,7 +174,7 @@ def GetFocusedWindowInfo():
 		print("Location: Track " + str(trackNumber) + ", Slot " + str(slotNumber + 1))
 
 	print("Linkable Parameters:")
-	for param in range(4240): #Every plugin (effects at least) carries 4240 MIDI CCs
+	for param in range(4240): #Every plugin (effects at least) carries 4240 plugins
 		while plugins.getParamName(param, trackNumber, slotNumber) != "": #Unnamed Midi CC (ones w/ default MIDI CC#) are just blank strings
 			print("     - " + plugins.getParamName(param, trackNumber, slotNumber))
 	print("Plugin ID: " + str(hex(ui.getFocusedFormID())))
@@ -310,15 +254,15 @@ FUNCTIONALITY IN USE:
 
 USES:
 	BI-DIRECTIONAL FEEDBACK - WORKING
-		- Editing a value on MIDI Fighter Twister changes it on FL (Default Implementation)
-		- Editing a value in FL changes it on the linked encoder
-		- During playback, if automation is present on linked encoder, indicators will light up accordingly in realtime
-		- When Rrcording during playback, can overwrite indicator automation.
+		- Editing a value on MIDI Fighter Twister changes it on FL
+		- Editing a value in FL changes it on the lined encoder
+		- During playback, if automation is present on linked encoder, indicators will light up accordingly in RealTime
+		- When Recording during playback, can overwrite indicator automation via overdubbing.
 	ENDLESS ENCODERS
 		- Endless Encoder functionality missing from Base MIDI Fighter Twister.
 		- When a value of 63 is given, linked control is reduced by 1.
 		- When a value of 65 is given, linked control is increased by 1.
-	SMART SWITCH BETWEEN PLUGINS/GENERATORS - WORKING
+	SMART SWITCH BETWEEN PLUGINS/GENERATORS
 		- When a GENERATOR/EFFECT is FOCUSED (window clicked on) in FL Studio, Any Linked Controls on the Midi Fighter Twister are Updated to those on the focused Generator/Effect.
 		- When Updating Midi Fighter Twister Indicators, last focused plugin is used.
 		- MAYBE? Change Color Scheme of all RGBs to preset one when focused on new effect/generator
