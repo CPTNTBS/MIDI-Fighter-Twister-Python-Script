@@ -2,12 +2,10 @@
 
 import math
 import midi
-import utils
 import device
 import plugins
-import mixer
 import ui
-
+import time
 
 """
 #----------------------------------------OVERRIDES----------------------------------------#
@@ -17,52 +15,58 @@ import ui
 channelInitCtrl = {0: set(), 1: set(), 2: set(), 4: set(), 5: set()}
 channelInitCtrlVal = {0: {}, 1: {}, 2: {}, 4: {}, 5: {}}
 
+lastUpdateTime = time.time()
+
+UNLINKED_CONTROL_ID = 0x7fffffff
+REFRESH_FLAGS = [0x127, 0x10127]
+FL_FOCUSED_FLAG = 32
+
 # This method turns off all of the lights on initialization of the script in FL.
 def OnInit():
 	for ctrlChange in range(64):
-		SendMIDI(0xB0, 0, ctrlChange, 0)
-		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
 
 # Likewise, this method returns the MIDI Fighter Twister to its default configuration upon closing FL Studio
 def OnDeInit():
 	for ctrlChange in range(64):
-		SendMIDI(0xB0, 0, ctrlChange, 0)
-		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
 
 def OnMidiMsg(event):
 	event.handled = False
 	channel = event.midiChan
 	if channel in channelInitCtrlVal and event.data1 in channelInitCtrlVal[channel]:
 		channelInitCtrlVal[channel][event.data1] = event.data2
-#	DebugChannelStates([0, 4])
+ 
+def OnIdle():
+	global lastUpdateTime
+	currentTime = time.time()
+	if currentTime - lastUpdateTime > 0.05:
+		UpdateEncoders(0)
+		UpdateEncoders(4)
+
+		UpdateIndicators(0)
+		UpdateIndicators(1)
+		UpdateIndicators(4)
+
+		lastUpdateTime = currentTime
 
 def OnRefresh(flag):
-	print(flag)
-	if flag == 32:
-		if ui.getFocused(5) == 0:
-			for ctrlChange in range(64):
-				SendMIDI(0xB0, 0, ctrlChange, 0)		
-				SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
-				SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-
-
-def OnIdle():
 	UpdateEncoders(0)
 	UpdateEncoders(1)
 	UpdateEncoders(4)
-
-	UpdateIndicators(0)
-	UpdateIndicators(4)
-
-def OnRefresh(event):
-	UpdateEncoders(0)
-	UpdateEncoders(1)
-	UpdateEncoders(4)
-	if event == 0x127 or event == 0x10127:
+	if flag in REFRESH_FLAGS:
 		UpdateIndicators(0)
 		UpdateIndicators(4)
+	if flag == FL_FOCUSED_FLAG:
+		if ui.getFocused(5) == 0:
+			for ctrlChange in range(64):
+				SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)		
+				SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
+				SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
 """
 #----------------------------------------HELPER METHODS----------------------------------------#
 """
@@ -72,7 +76,9 @@ def OnRefresh(event):
 #	- data1 = the individual controller (encoder, button, slider, led, etc) that you want to change (shift by 8).
 #	- data2 = the value you want to send. (bit shift by 16).
 def SendMIDI(command, channel, data1, data2):
-	device.midiOutMsg((command | channel) + (data1 << 8) + (data2 << 16));
+	status = command | channel
+	message = status + (data1 << 8) + (data2 << 16)
+	device.midiOutMsg(message);
 
 # This Method does a lot of things:
 # 1. For any linked controls, it turns the RGB on and sets the indicator brightness to the max
@@ -87,10 +93,8 @@ def UpdateEncoders(channel):
     updatedCtrlSet = set()
 
     for ctrlChange in range(64):
-        eventID = device.findEventID(
-            midi.EncodeRemoteControlID(device.getPortNumber(), channel, ctrlChange)
-        )
-        isLinked = eventID != 0x7fffffff
+        eventID = getEventID(channel, ctrlChange)
+        isLinked = eventID != UNLINKED_CONTROL_ID
         wasInitialized = ctrlChange in currentCtrlSet
 
         if isLinked:
@@ -100,149 +104,88 @@ def UpdateEncoders(channel):
                 channelInitCtrlVal[channel][ctrlChange] = 0
                 # Send MIDI messages to turn on lights
                 if channel == 0:
-                    SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-                    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-                    #if device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 1, ctrlChange)) == 0x7fffffff:
-                    #    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_SEMI)
-                    #else:
-                    #    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-                elif channel == 1:
-                    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-                elif channel == 4:
-                    # Include any channel 4 specific behavior here
-                    pass
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
+                #elif channel == 1:
+                #    pass
+                #elif channel == 4:
+                #    pass
         else:
             if wasInitialized:
                 # Control was unlinked
                 del channelInitCtrlVal[channel][ctrlChange]
                 # Send MIDI messages to turn off lights
                 if channel == 0:
-                    SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-                    SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
-                    SendMIDI(0xB0, 0, ctrlChange, 0)
-                elif channel == 1:
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+                #elif channel == 1:
                     # Include any channel 1 specific behavior here
-                    pass
-                elif channel == 4:
+                #    pass
+                #elif channel == 4:
                     # Include any channel 4 specific behavior here
-                    pass
+                #    pass
 
     # Update the initialized controls for the channel
     channelInitCtrl[channel] = updatedCtrlSet
 
 # BiDirectional Feedback
 def UpdateIndicators(channel):
-	if channel in channelInitCtrlVal:
-		for linkedCtrl in channelInitCtrlVal[channel]:
-#			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, linkedCtrl))))
-			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), channel, linkedCtrl))))
-			if possNewVal != channelInitCtrlVal[channel][linkedCtrl]:
-				channelInitCtrlVal[channel][linkedCtrl] = possNewVal
-				SendMIDI(0xB0, channel, linkedCtrl, possNewVal)
+    if channel not in channelInitCtrlVal:
+        return
 
-# Endless Encoder Fix Status - TO DO
+    for linkedCtrl in channelInitCtrlVal[channel]:
+        eventID = getEventID(channel, linkedCtrl)
+        linkedValue = device.getLinkedValue(eventID)
+
+        if channel == 1:
+            newValue = 127 if linkedValue > 0 else 0
+        else:
+            newValue = round(127 * linkedValue)
+
+        if newValue != channelInitCtrlVal[channel][linkedCtrl]:
+            channelInitCtrlVal[channel][linkedCtrl] = newValue
+            SendMIDI(midi.MIDI_CONTROLCHANGE, channel, linkedCtrl, newValue)
+
+# Endless Encoder Fix
 #	- Made for ENC 3FH/41H mode.
 #		- When a value of 65 is given, the encoder sends a midi value of
 #			newValue = currentValue + 1
 #		- When a value of 63 is given, the encoder sends a midi value of
 #			newValue = currentValue - 1
-def EndlessEncoder(encVal):
-	if encVal == 65:
-		print('MixVal + 1')
-	elif encVal == 63:
-		print('MixVal - 1')
+def EndlessEncoder(currentValue, encVal):
+    if encVal == 65:
+        return min(currentValue + 1, 127)
+    elif encVal == 63:
+        return max(currentValue - 1, 0)
+    else:
+        return currentValue
 
-# Get method for EventData
-def GetEventID(track,slot,param):
-	return (((0x2000 + 0x40 * track) + slot) << 0x10) + 0x8000 + param
-
-# Get method for Plugin Track
-def GetFocusedPluginTrack():
-	return math.floor((ui.getFocusedFormID() >> 16) / 64)
-
-# Get method for Plugin Slot
-def GetFocusedPluginSlot():
-	return (ui.getFocusedFormID() >> 16) % 64
-
-# Debugging method for checking focused plugins
-def GetFocusedWindowInfo():
-	trackNumber = GetFocusedPluginTrack()
-	slotNumber = GetFocusedPluginSlot()
-	print("Current Plugin: " + str(plugins.getPluginName(trackNumber, slotNumber)))
-	if trackNumber == 0:
-		print("Location: Master Track, Slot " + str(slotNumber + 1))
-	else:
-		print("Location: Track " + str(trackNumber) + ", Slot " + str(slotNumber + 1))
-
-	print("Linkable Parameters:")
-	for param in range(4240): #Every plugin (effects at least) carries 4240 plugins
-		while plugins.getParamName(param, trackNumber, slotNumber) != "": #Unnamed Midi CC (ones w/ default MIDI CC#) are just blank strings
-			print("     - " + plugins.getParamName(param, trackNumber, slotNumber))
-	print("Plugin ID: " + str(hex(ui.getFocusedFormID())))
-	print("----------------------------------------------")
-
-# Debugging method for ControlID and EventId of current CC Value
-def GetIDS(event):
-	print("CC Value: " + str(event.data1))
-	print("Control ID: " + str(hex(midi.EncodeRemoteControlID(device.getPortNumber(), event.midiChan, event.data1))))
-	print("Event ID: " + str(hex(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), event.midiChan, event.data1)))))
-
-# Debugging method for Channel Data?
-def PrintEncoderData(encoder):
-	for channelNr in range(0, 4):
-		ID = device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), channelNr, encoder), 0)
-		print(device.getLinkedInfo(ID))
-
-def DebugChannelStates(selected_channels=None):
-    # If no specific channels are provided, default to all channels
-    if selected_channels is None:
-        selected_channels = channelInitCtrl.keys()
-    
-    for channel in selected_channels:
-        if channel in channelInitCtrl:  # Ensure the channel exists
-            print(f"Channel {channel}:")
-            
-            # Print the initialized control numbers
-            controls = channelInitCtrl[channel]
-            values = channelInitCtrlVal[channel]
-            
-            if controls:
-                print("  Initialized Controls:")
-                for ctrl in controls:
-                    value = values.get(ctrl, "Not set")  # Default if not found
-                    print(f"    Control {ctrl}: Value {value}")
-            else:
-                print("  No Initialized Controls.")
-        else:
-            print(f"  Channel {channel} does not exist.")
-        
-        print()  # Add a blank line for better readability
-
-# Example usage:
-DebugChannelStates([0, 1])  # Specify channels you want to print
-
+# Get method for EventData (Utility)
+def getEventID(channel,ctrlChange):
+	return device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), channel, ctrlChange))
 
 """
 #----------------------------------------CLASSES----------------------------------------#
 """
 	
 class EncoderStatus:
-	ON = 127;
-	OFF = 0;
+	ON = 127
+	OFF = 0
 
 class Color:
 	SAPPHIRE = 1
 	BLUE = 8
 	AZURE = 16
 	CYAN = 24
-	MINT = 40#32
-	GREEN = 51#40
-	APPLE = 61#48
-	YELLOW = 65#56
-	GOLD = 70#64
+	MINT = 40
+	GREEN = 51
+	APPLE = 61
+	YELLOW = 65
+	GOLD = 70
 	ORANGE = 74
-	AMBER = 79#80
-	RED = 83#88
+	AMBER = 79
+	RED = 83
 	FUCSHIA = 90
 	MAGENTA = 98
 	ORCHID = 109
