@@ -106,3 +106,14 @@ TENTATIVE MIDI FIGHTER TWISTER BANK SETUP:
 	BANK 3: Misc. FL
 	BANK 4: Free
 """
+"""
+# 0 = 1st Encoder Indicator Amount
+# 4 = 2nd Encoder Indicator Amount
+
+# 1 = Encoder LED Status (On, Off, Color)
+
+# 2 = Encoder LED Animations (Brightness, Gate, Pulse)
+# 5 = Indicator Animations (Brightness, Gate, Pulse)
+
+
+"""

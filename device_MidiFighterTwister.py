@@ -14,37 +14,39 @@ import ui
 """
 
 # New implementation using sets/dictionaries to provide constant access time.
-channelInitCtrl = {0: set(), 1: set(), 4: set()}
-channelInitCtrlVal = {0: {}, 1: {}, 4: {}}
+channelInitCtrl = {0: set(), 1: set(), 2: set(), 4: set(), 5: set()}
+channelInitCtrlVal = {0: {}, 1: {}, 2: {}, 4: {}, 5: {}}
 
 # This method turns off all of the lights on initialization of the script in FL.
 def OnInit():
 	for ctrlChange in range(64):
+		SendMIDI(0xB0, 0, ctrlChange, 0)
 		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
 		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
-		SendMIDI(0xB0, 0, ctrlChange, 0)
 
 # Likewise, this method returns the MIDI Fighter Twister to its default configuration upon closing FL Studio
 def OnDeInit():
 	for ctrlChange in range(64):
-		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
-		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
 		SendMIDI(0xB0, 0, ctrlChange, 0)
+		SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+		SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_BRIGHT)
 
 def OnMidiMsg(event):
 	event.handled = False
 	channel = event.midiChan
 	if channel in channelInitCtrlVal and event.data1 in channelInitCtrlVal[channel]:
 		channelInitCtrlVal[channel][event.data1] = event.data2
+#	DebugChannelStates([0, 4])
 
 def OnRefresh(flag):
 	print(flag)
 	if flag == 32:
 		if ui.getFocused(5) == 0:
 			for ctrlChange in range(64):
-				SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-				SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
 				SendMIDI(0xB0, 0, ctrlChange, 0)		
+				SendMIDI(0xB0, 2, ctrlChange, Animation.RGB_OFF)
+				SendMIDI(0xB0, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+
 
 def OnIdle():
 	UpdateEncoders(0)
@@ -61,7 +63,6 @@ def OnRefresh(event):
 	if event == 0x127 or event == 0x10127:
 		UpdateIndicators(0)
 		UpdateIndicators(4)
-
 """
 #----------------------------------------HELPER METHODS----------------------------------------#
 """
@@ -129,12 +130,12 @@ def UpdateEncoders(channel):
     # Update the initialized controls for the channel
     channelInitCtrl[channel] = updatedCtrlSet
 
-
 # BiDirectional Feedback
 def UpdateIndicators(channel):
 	if channel in channelInitCtrlVal:
 		for linkedCtrl in channelInitCtrlVal[channel]:
-			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, linkedCtrl))))
+#			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), 0, linkedCtrl))))
+			possNewVal = round(127 * device.getLinkedValue(device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), channel, linkedCtrl))))
 			if possNewVal != channelInitCtrlVal[channel][linkedCtrl]:
 				channelInitCtrlVal[channel][linkedCtrl] = possNewVal
 				SendMIDI(0xB0, channel, linkedCtrl, possNewVal)
@@ -191,6 +192,36 @@ def PrintEncoderData(encoder):
 	for channelNr in range(0, 4):
 		ID = device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), channelNr, encoder), 0)
 		print(device.getLinkedInfo(ID))
+
+def DebugChannelStates(selected_channels=None):
+    # If no specific channels are provided, default to all channels
+    if selected_channels is None:
+        selected_channels = channelInitCtrl.keys()
+    
+    for channel in selected_channels:
+        if channel in channelInitCtrl:  # Ensure the channel exists
+            print(f"Channel {channel}:")
+            
+            # Print the initialized control numbers
+            controls = channelInitCtrl[channel]
+            values = channelInitCtrlVal[channel]
+            
+            if controls:
+                print("  Initialized Controls:")
+                for ctrl in controls:
+                    value = values.get(ctrl, "Not set")  # Default if not found
+                    print(f"    Control {ctrl}: Value {value}")
+            else:
+                print("  No Initialized Controls.")
+        else:
+            print(f"  Channel {channel} does not exist.")
+        
+        print()  # Add a blank line for better readability
+
+# Example usage:
+DebugChannelStates([0, 1])  # Specify channels you want to print
+
+
 """
 #----------------------------------------CLASSES----------------------------------------#
 """
