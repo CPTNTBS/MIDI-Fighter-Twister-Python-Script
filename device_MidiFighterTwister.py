@@ -1,9 +1,7 @@
 # name=Midi Fighter Twister
 
-import math
 import midi
 import device
-import plugins
 import ui
 import time
 
@@ -112,30 +110,22 @@ def UpdateEncoders(channel):
                 # Newly linked control
                 channelInitCtrlVal[channel][ctrlChange] = 0
                 # Send MIDI messages to turn on lights
-                if channel == 0:
+                if channel == 0 or channel == 4:
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
                 #elif channel == 1:
-                #    pass
-                elif channel == 4:
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
+                	# TO DO
         else:
             if wasInitialized:
                 # Control was unlinked
                 del channelInitCtrlVal[channel][ctrlChange]
                 # Send MIDI messages to turn off lights
-                if channel == 0:
+                if channel == 0 or channel == 4:
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
                 #elif channel == 1:
-                    # Include any channel 1 specific behavior here
-                #    pass
-                elif channel == 4:
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+                    # TO DO
 
     # Update the initialized controls for the channel
     channelInitCtrl[channel] = updatedCtrlSet
