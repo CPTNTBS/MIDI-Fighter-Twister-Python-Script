@@ -10,16 +10,24 @@ import time
 """
 #----------------------------------------OVERRIDES----------------------------------------#
 """
-
-# New implementation using sets/dictionaries to provide constant access time.
-channelInitCtrl = {0: set(), 1: set(), 2: set(), 4: set(), 5: set()}
-channelInitCtrlVal = {0: {}, 1: {}, 2: {}, 4: {}, 5: {}}
+# Hardcoded Encoder Data from MidiFighter Utility 
+# Edit to fit the settings of your setup, make sure to include all 64 encoders or the script might break
+shiftEncoderCtrl = {0,1,2,3,4,5,6,7,8,9,10,11,
+					16,17,18,19,20,21,22,23,24,25,26,27}
+toggleEncoderCtrl = {12,13,14,15,
+					 28,29,30,31,
+					 32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,
+					 48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63}
 
 lastUpdateTime = time.time()
 
 UNLINKED_CONTROL_ID = 0x7fffffff
 REFRESH_FLAGS = [0x127, 0x10127]
 FL_FOCUSED_FLAG = 32
+
+# New implementation using sets/dictionaries to provide constant access time.
+channelInitCtrl = {0: set(), 1: set(), 2: set(), 4: set(), 5: set()}
+channelInitCtrlVal = {0: {}, 1: {}, 2: {}, 4: {}, 5: {}}
 
 # This method turns off all of the lights on initialization of the script in FL.
 def OnInit():
@@ -65,6 +73,7 @@ def OnRefresh(flag):
 		if ui.getFocused(5) == 0:
 			for ctrlChange in range(64):
 				SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)		
+				SendMIDI(midi.MIDI_CONTROLCHANGE, 4, ctrlChange, 0)		
 				SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
 				SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
 """
@@ -108,8 +117,9 @@ def UpdateEncoders(channel):
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
                 #elif channel == 1:
                 #    pass
-                #elif channel == 4:
-                #    pass
+                elif channel == 4:
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
         else:
             if wasInitialized:
                 # Control was unlinked
@@ -122,9 +132,10 @@ def UpdateEncoders(channel):
                 #elif channel == 1:
                     # Include any channel 1 specific behavior here
                 #    pass
-                #elif channel == 4:
-                    # Include any channel 4 specific behavior here
-                #    pass
+                elif channel == 4:
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
 
     # Update the initialized controls for the channel
     channelInitCtrl[channel] = updatedCtrlSet
