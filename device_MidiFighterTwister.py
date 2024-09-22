@@ -18,6 +18,7 @@ toggleEncoderCtrl = {12,13,14,15,
 					 28,29,30,31,
 					 32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,
 					 48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63}
+indicatorAnimation = {}  # key: ctrlChange, value: current animation
 
 lastUpdateTime = time.time()
 
@@ -31,6 +32,8 @@ channelInitCtrlVal = {0: {}, 1: {}, 2: {}, 4: {}, 5: {}}
 
 # This method turns off all of the lights on initialization of the script in FL.
 def OnInit():
+	global indicatorAnimation
+	indicatorAnimation = {}
 	for ctrlChange in range(64):
 		SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
 		SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
@@ -59,6 +62,8 @@ def OnIdle():
 		UpdateIndicators(0)
 		UpdateIndicators(1)
 		UpdateIndicators(4)
+		
+		UpdateIndicatorAnimations()
 
 		lastUpdateTime = currentTime
 
@@ -69,6 +74,7 @@ def OnRefresh(flag):
 	if flag in REFRESH_FLAGS:
 		UpdateIndicators(0)
 		UpdateIndicators(4)
+		UpdateIndicatorAnimations()
 	if flag == FL_FOCUSED_FLAG:
 		if ui.getFocused(5) == 0:
 			for ctrlChange in range(64):
@@ -94,69 +100,77 @@ def SendMIDI(command, channel, data1, data2):
 # 2. For any unlinked controls, it turns the RGB off and dims the indicator brightness
 # 3. Functionality for adding linked controls, removing linked controls, and replacing linked controls is present
 def UpdateEncoders(channel):
-    # Ensure the channel is valid
-    if channel not in channelInitCtrl:
-        return
+	# Ensure the channel is valid
+	if channel not in channelInitCtrl:
+		return
 
-    currentCtrlSet = channelInitCtrl[channel]
-    updatedCtrlSet = set()
+	currentCtrlSet = channelInitCtrl[channel]
+	updatedCtrlSet = set()
 
-    for ctrlChange in range(64):
-        eventID = getEventID(channel, ctrlChange)
-        isLinked = eventID != UNLINKED_CONTROL_ID
-        wasInitialized = ctrlChange in currentCtrlSet
+	for ctrlChange in range(64):
+		eventID = getEventID(channel, ctrlChange)
+		isLinked = eventID != UNLINKED_CONTROL_ID
+		wasInitialized = ctrlChange in currentCtrlSet
 
-        if isLinked:
-            updatedCtrlSet.add(ctrlChange)
-            if not wasInitialized:
-                # Newly linked control
-                channelInitCtrlVal[channel][ctrlChange] = 0
-                # Send MIDI messages to turn on lights
-                if channel == 0:
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
-                #elif channel == 1:
-                #    pass
-                elif channel == 4:
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
-        else:
-            if wasInitialized:
-                # Control was unlinked
-                del channelInitCtrlVal[channel][ctrlChange]
-                # Send MIDI messages to turn off lights
-                if channel == 0:
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
-                #elif channel == 1:
-                    # Include any channel 1 specific behavior here
-                #    pass
-                elif channel == 4:
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+		if isLinked:
+			updatedCtrlSet.add(ctrlChange)
+			if not wasInitialized:
+				# Newly linked control
+				channelInitCtrlVal[channel][ctrlChange] = 0
+				# Send MIDI messages to turn on lights
+				if channel == 0 or channel == 4:
+					SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
+				#elif channel == 1:
+				#	pass
+		else:
+			if wasInitialized:
+				# Control was unlinked
+				del channelInitCtrlVal[channel][ctrlChange]
+				# Send MIDI messages to turn off lights
+				if channel == 0 or channel == 4: 
+					SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
+					SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+				#elif channel == 1:
+					# Include any channel 1 specific behavior here
+				#	pass
 
-    # Update the initialized controls for the channel
-    channelInitCtrl[channel] = updatedCtrlSet
+	# Update the initialized controls for the channel
+	channelInitCtrl[channel] = updatedCtrlSet
 
 # BiDirectional Feedback
 def UpdateIndicators(channel):
-    if channel not in channelInitCtrlVal:
-        return
+	if channel not in channelInitCtrlVal:
+		return
 
-    for linkedCtrl in channelInitCtrlVal[channel]:
-        eventID = getEventID(channel, linkedCtrl)
-        linkedValue = device.getLinkedValue(eventID)
+	for linkedCtrl in channelInitCtrlVal[channel]:
+		eventID = getEventID(channel, linkedCtrl)
+		linkedValue = device.getLinkedValue(eventID)
 
-        if channel == 1:
-            newValue = 127 if linkedValue > 0 else 0
-        else:
-            newValue = round(127 * linkedValue)
+		if channel == 1:
+			newValue = 127 if linkedValue > 0 else 0
+		else:
+			newValue = round(127 * linkedValue)
 
-        if newValue != channelInitCtrlVal[channel][linkedCtrl]:
-            channelInitCtrlVal[channel][linkedCtrl] = newValue
-            SendMIDI(midi.MIDI_CONTROLCHANGE, channel, linkedCtrl, newValue)
+		if newValue != channelInitCtrlVal[channel][linkedCtrl]:
+			channelInitCtrlVal[channel][linkedCtrl] = newValue
+			SendMIDI(midi.MIDI_CONTROLCHANGE, channel, linkedCtrl, newValue)
+
+def UpdateIndicatorAnimations():
+	for ctrlChange in range(64):
+		linkedOnChannel0 = ctrlChange in channelInitCtrl[0]
+		linkedOnChannel4 = ctrlChange in channelInitCtrl[4]
+
+		if linkedOnChannel0 and linkedOnChannel4:
+			desiredAnimation = Animation.INDICATOR_BRIGHT
+		elif linkedOnChannel0 or linkedOnChannel4:
+			desiredAnimation = Animation.INDICATOR_PULSE
+		else:
+			desiredAnimation = Animation.INDICATOR_OFF + 1  # Ensure indicator is off
+
+		currentAnimation = indicatorAnimation.get(ctrlChange, None)
+		if currentAnimation != desiredAnimation:
+			indicatorAnimation[ctrlChange] = desiredAnimation
+			SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, desiredAnimation)
 
 # Endless Encoder Fix
 #	- Made for ENC 3FH/41H mode.
@@ -165,12 +179,12 @@ def UpdateIndicators(channel):
 #		- When a value of 63 is given, the encoder sends a midi value of
 #			newValue = currentValue - 1
 def EndlessEncoder(currentValue, encVal):
-    if encVal == 65:
-        return min(currentValue + 1, 127)
-    elif encVal == 63:
-        return max(currentValue - 1, 0)
-    else:
-        return currentValue
+	if encVal == 65:
+		return min(currentValue + 1, 127)
+	elif encVal == 63:
+		return max(currentValue - 1, 0)
+	else:
+		return currentValue
 
 # Get method for EventData (Utility)
 def getEventID(channel,ctrlChange):
