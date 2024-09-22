@@ -50,7 +50,7 @@ def OnMidiMsg(event):
 def OnIdle():
 	global lastUpdateTime
 	currentTime = time.time()
-	if currentTime - lastUpdateTime > 0.05:
+	if currentTime - lastUpdateTime > 0.025:
 		UpdateEncoders(0)
 		UpdateEncoders(4)
 
@@ -123,7 +123,7 @@ def UpdateEncoders(channel):
                 if channel == 0 or channel == 4:
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
-                    SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, channel, ctrlChange, 0)
                 #elif channel == 1:
                     # TO DO
 
