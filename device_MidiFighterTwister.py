@@ -163,7 +163,7 @@ def UpdateIndicatorAnimations():
 		if linkedOnChannel0 and linkedOnChannel4:
 			desiredAnimation = Animation.INDICATOR_BRIGHT
 		elif linkedOnChannel0 or linkedOnChannel4:
-			desiredAnimation = Animation.INDICATOR_PULSE
+			desiredAnimation = Animation.INDICATOR_PULSE+5
 		else:
 			desiredAnimation = Animation.INDICATOR_OFF + 1  # Ensure indicator is off
 
