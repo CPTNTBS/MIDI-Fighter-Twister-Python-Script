@@ -35,11 +35,19 @@ def OnInit():
 		SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
 
 # Likewise, this method returns the MIDI Fighter Twister to its default configuration upon closing FL Studio
+#def OnDeInit():
+#	for ctrlChange in range(64):
+#		SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
+#		SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
+#		SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
+
+# Alternate implementation: on deinitialization, turn everything off. good for darker rooms/when you dont want the lights to be on.
 def OnDeInit():
 	for ctrlChange in range(64):
 		SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
-		SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
-		SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF)
+		SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
+
 
 def OnMidiMsg(event):
 	event.handled = False
