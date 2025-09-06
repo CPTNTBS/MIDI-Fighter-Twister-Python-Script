@@ -55,9 +55,7 @@ def OnMidiMsg(event):
 	event.handled = False
 	channel = event.midiChan
 	if channel in channelInitCtrlVal and event.data1 in channelInitCtrlVal[channel]:
-		channelInitCtrlVal[channel][event.data1] = event.data2
-	print(f"Channel: {channel}, Ctrl: {event.data1}, Value: {event.data2}")
- 
+		channelInitCtrlVal[channel][event.data1] = event.data2 
  
 def OnIdle():
 	global lastUpdateTime
