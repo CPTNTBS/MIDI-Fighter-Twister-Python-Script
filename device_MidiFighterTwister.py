@@ -19,7 +19,8 @@ toggleEncoderCtrl = {12,13,14,15,
 
 lastUpdateTime = time.time()
 
-UNLINKED_CONTROL_ID = 0x7fffffff
+#UNLINKED_CONTROL_ID = 0x7fffffff # Old value, works in older versions of FL Studio
+UNLINKED_CONTROL_ID = -0x1 # New value for unlinked controls, works in FL Studio 25 and later
 REFRESH_FLAGS = [0x127, 0x10127]
 FL_FOCUSED_FLAG = 32
 
@@ -33,6 +34,7 @@ def OnInit():
 		SendMIDI(midi.MIDI_CONTROLCHANGE, 0, ctrlChange, 0)
 		SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
 		SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_OFF)
+	print("Midi Fighter Twister Initialized")
 
 # Likewise, this method returns the MIDI Fighter Twister to its default configuration upon closing FL Studio
 #def OnDeInit():
@@ -54,6 +56,8 @@ def OnMidiMsg(event):
 	channel = event.midiChan
 	if channel in channelInitCtrlVal and event.data1 in channelInitCtrlVal[channel]:
 		channelInitCtrlVal[channel][event.data1] = event.data2
+	print(f"Channel: {channel}, Ctrl: {event.data1}, Value: {event.data2}")
+ 
  
 def OnIdle():
 	global lastUpdateTime
