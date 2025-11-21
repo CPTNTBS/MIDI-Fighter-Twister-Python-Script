@@ -4,6 +4,7 @@ import midi
 import device
 import ui
 import time
+import mixer
 
 """
 #----------------------------------------OVERRIDES----------------------------------------#
@@ -27,6 +28,13 @@ FL_FOCUSED_FLAG = 32
 # New implementation using sets/dictionaries to provide constant access time.
 channelInitCtrl = {0: set(), 1: set(), 2: set(), 4: set(), 5: set()}
 channelInitCtrlVal = {0: {}, 1: {}, 2: {}, 4: {}, 5: {}}
+
+# Track pulsing encoders: {channel: {ctrl: start_time}}
+pulsingEncoders = {0: {}, 1: {}, 2: {}, 4: {}, 5: {}}
+PULSE_DURATION = 12 # Seconds to pulse before returning to bright
+
+# Track just-linked controls to skip pulsing on first value read
+justLinkedCtrls = {0: set(), 1: set(), 2: set(), 4: set(), 5: set()}
 
 # This method turns off all of the lights on initialization of the script in FL.
 def OnInit():
@@ -54,8 +62,18 @@ def OnDeInit():
 def OnMidiMsg(event):
 	event.handled = False
 	channel = event.midiChan
-	if channel in channelInitCtrlVal and event.data1 in channelInitCtrlVal[channel]:
-		channelInitCtrlVal[channel][event.data1] = event.data2 
+	ctrl = event.data1
+
+	if channel in channelInitCtrlVal and ctrl in channelInitCtrlVal[channel]:
+		# Check if value actually changed before triggering pulse
+		if channelInitCtrlVal[channel][ctrl] != event.data2:
+			channelInitCtrlVal[channel][ctrl] = event.data2
+
+			# Skip pulse if just linked (will be cleared at end of OnIdle cycle)
+			if ctrl not in justLinkedCtrls[channel]:
+				# Trigger pulse on manual encoder turn
+				if channel in [0, 4]:  # Only for encoder channels
+					TriggerPulse(channel, ctrl) 
  
 def OnIdle():
 	global lastUpdateTime
@@ -67,6 +85,13 @@ def OnIdle():
 		UpdateIndicators(0)
 		UpdateIndicators(1)
 		UpdateIndicators(4)
+
+		UpdatePulsingEncoders(currentTime)
+
+		# Clear just-linked controls at end of cycle
+		# This allows both OnMidiMsg and UpdateIndicators to skip pulsing during the first cycle
+		for channel in justLinkedCtrls:
+			justLinkedCtrls[channel].clear()
 
 		lastUpdateTime = currentTime
 
@@ -118,17 +143,36 @@ def UpdateEncoders(channel):
             updatedCtrlSet.add(ctrlChange)
             if not wasInitialized:
                 # Newly linked control
-                channelInitCtrlVal[channel][ctrlChange] = 0
-                # Send MIDI messages to turn on lights
+                # Initialize with ACTUAL FL value to prevent false "change" detection
+                linkedValue = device.getLinkedValue(eventID)
+                if channel == 1:
+                    initialValue = 127 if linkedValue > 0 else 0
+                else:
+                    initialValue = round(127 * linkedValue)
+                channelInitCtrlVal[channel][ctrlChange] = initialValue
+
+                # Mark as just linked so we don't pulse on first value read
+                justLinkedCtrls[channel].add(ctrlChange)
+                # Stop any ongoing pulse and force to bright
+                if ctrlChange in pulsingEncoders[channel]:
+                    del pulsingEncoders[channel][ctrlChange]
+                # Send MIDI messages to turn on lights (force bright, not pulse)
                 if channel == 0 or channel == 4:
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_BRIGHT)
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrlChange, Animation.RGB_BRIGHT)
+                    # Also send the actual position value
+                    SendMIDI(midi.MIDI_CONTROLCHANGE, channel, ctrlChange, initialValue)
                 #elif channel == 1:
                 	# TO DO
         else:
             if wasInitialized:
                 # Control was unlinked
                 del channelInitCtrlVal[channel][ctrlChange]
+                # Remove from just-linked tracking if present
+                justLinkedCtrls[channel].discard(ctrlChange)
+                # Remove from pulsing tracking if present
+                if ctrlChange in pulsingEncoders[channel]:
+                    del pulsingEncoders[channel][ctrlChange]
                 # Send MIDI messages to turn off lights
                 if channel == 0 or channel == 4:
                     SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrlChange, Animation.INDICATOR_OFF + 1)
@@ -158,6 +202,12 @@ def UpdateIndicators(channel):
             channelInitCtrlVal[channel][linkedCtrl] = newValue
             SendMIDI(midi.MIDI_CONTROLCHANGE, channel, linkedCtrl, newValue)
 
+            # Skip pulse if just linked (will be cleared at end of OnIdle cycle)
+            if linkedCtrl not in justLinkedCtrls[channel]:
+                # Only pulse if this is a real value change, not first read
+                if channel in [0, 4]:  # Only pulse for encoder channels
+                    TriggerPulse(channel, linkedCtrl)
+
 # Endless Encoder Fix
 #	- Made for ENC 3FH/41H mode.
 #		- When a value of 65 is given, the encoder sends a midi value of
@@ -175,6 +225,38 @@ def EndlessEncoder(currentValue, encVal):
 # Get method for EventData (Utility)
 def getEventID(channel,ctrlChange):
 	return device.findEventID(midi.EncodeRemoteControlID(device.getPortNumber(), channel, ctrlChange))
+
+# Trigger pulse animation for an encoder
+def TriggerPulse(channel, ctrl):
+	if channel not in pulsingEncoders:
+		return
+
+	# Mark this encoder as pulsing with current timestamp
+	pulsingEncoders[channel][ctrl] = time.time()
+
+	# Set to pulse animation
+	SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrl, Animation.INDICATOR_PULSE + 4)
+	SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrl, Animation.RGB_PULSE + 4)
+
+# Update pulsing encoders and restore to bright after duration
+def UpdatePulsingEncoders(currentTime):
+	for channel in pulsingEncoders:
+		# Create a copy of keys to avoid modifying dict during iteration
+		pulsing_ctrls = list(pulsingEncoders[channel].keys())
+
+		for ctrl in pulsing_ctrls:
+			startTime = pulsingEncoders[channel][ctrl]
+			elapsed = currentTime - startTime
+
+			# If pulse duration exceeded, restore to bright
+			if elapsed >= PULSE_DURATION:
+				# Remove from pulsing tracker
+				del pulsingEncoders[channel][ctrl]
+
+				# Restore to bright (only if still linked)
+				if ctrl in channelInitCtrlVal.get(channel, {}):
+					SendMIDI(midi.MIDI_CONTROLCHANGE, 5, ctrl, Animation.INDICATOR_BRIGHT)
+					SendMIDI(midi.MIDI_CONTROLCHANGE, 2, ctrl, Animation.RGB_BRIGHT)
 
 """
 #----------------------------------------CLASSES----------------------------------------#
